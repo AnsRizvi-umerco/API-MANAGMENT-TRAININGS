@@ -1,0 +1,22 @@
+{
+  "name": "po-api",
+  "version": "1.0.0",
+  "description": "Purchase Orders REST API (EDI 850/855/856 style) for IBM API Gateway demos",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "reset": "node scripts/reset.js",
+    "smoke": "bash smoke.sh"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "js-yaml": "^4.1.0",
+    "mongodb": "^6.12.0"
+  }
+}

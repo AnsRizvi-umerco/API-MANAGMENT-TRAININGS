@@ -1,0 +1,369 @@
+openapi: 3.0.3
+info:
+  title: po-api
+  version: 1.0.0
+  description: >
+    Purchase Orders REST API shaped like EDI 850/855/856.
+    No security schemes — authentication and rate limiting are handled by IBM API Gateway.
+servers:
+  - url: http://localhost:3000
+    description: Local development
+  - url: https://REPLACE-WITH-PUBLIC-URL
+    description: Public gateway / Render URL
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Health check with MongoDB ping
+      responses:
+        '200':
+          description: Service and database healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  db:
+                    type: string
+        '503':
+          description: Database unreachable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /echo:
+    get:
+      operationId: getEcho
+      summary: Echo request metadata and headers
+      responses:
+        '200':
+          description: Echo payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  method:
+                    type: string
+                  path:
+                    type: string
+                  query:
+                    type: object
+                  clientIp:
+                    type: string
+                    nullable: true
+                  headers:
+                    type: object
+  /orders:
+    get:
+      operationId: listOrders
+      summary: List purchase orders
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [received, acknowledged, shipped, rejected]
+      responses:
+        '200':
+          description: Order list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PurchaseOrder'
+        '400':
+          description: Unknown status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      operationId: createOrder
+      summary: Create a purchase order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrder'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /orders/{poNumber}:
+    get:
+      operationId: getOrder
+      summary: Get a purchase order by number
+      parameters:
+        - $ref: '#/components/parameters/poNumber'
+      responses:
+        '200':
+          description: Purchase order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrder'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /orders/{poNumber}/acknowledge:
+    post:
+      operationId: acknowledgeOrder
+      summary: Acknowledge a received purchase order (EDI 855)
+      parameters:
+        - $ref: '#/components/parameters/poNumber'
+      responses:
+        '200':
+          description: Acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrder'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /orders/{poNumber}/shipments:
+    get:
+      operationId: listShipments
+      summary: List shipments for a purchase order
+      parameters:
+        - $ref: '#/components/parameters/poNumber'
+      responses:
+        '200':
+          description: Shipment list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shipments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Shipment'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      operationId: createShipment
+      summary: Create shipment and mark order shipped (EDI 856)
+      parameters:
+        - $ref: '#/components/parameters/poNumber'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShipmentRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shipment'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /slow:
+    get:
+      operationId: getSlow
+      summary: Sleep then return (gateway timeout tests)
+      parameters:
+        - name: ms
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 3000
+      responses:
+        '200':
+          description: Slept
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sleptMs:
+                    type: integer
+  /fail:
+    get:
+      operationId: getFail
+      summary: Always returns 500 (gateway error tests)
+      responses:
+        '500':
+          description: Intentional failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /openapi.json:
+    get:
+      operationId: getOpenApi
+      summary: OpenAPI document as JSON
+      responses:
+        '200':
+          description: OpenAPI 3.0.3 document
+          content:
+            application/json:
+              schema:
+                type: object
+components:
+  parameters:
+    poNumber:
+      name: poNumber
+      in: path
+      required: true
+      schema:
+        type: string
+        example: PO-0001
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+          required: [code, message]
+      required: [error]
+    OrderLine:
+      type: object
+      properties:
+        lineNo:
+          type: integer
+        sku:
+          type: string
+        description:
+          type: string
+        qty:
+          type: number
+        unitPrice:
+          type: number
+      required: [lineNo, sku, qty, unitPrice]
+    PurchaseOrder:
+      type: object
+      properties:
+        poNumber:
+          type: string
+        buyer:
+          type: string
+        supplier:
+          type: string
+        status:
+          type: string
+          enum: [received, acknowledged, shipped, rejected]
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderLine'
+        total:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        internalCostCenter:
+          type: string
+      required: [poNumber, buyer, supplier, status, lines, total, createdAt, internalCostCenter]
+    CreateOrderRequest:
+      type: object
+      properties:
+        buyer:
+          type: string
+        supplier:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderLine'
+        internalCostCenter:
+          type: string
+      required: [buyer, supplier, lines]
+    ShipmentLine:
+      type: object
+      properties:
+        lineNo:
+          type: integer
+        qty:
+          type: number
+      required: [lineNo, qty]
+    Shipment:
+      type: object
+      properties:
+        shipmentId:
+          type: string
+        poNumber:
+          type: string
+        carrier:
+          type: string
+        trackingNumber:
+          type: string
+        shippedAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShipmentLine'
+      required: [shipmentId, poNumber, carrier, trackingNumber, shippedAt, lines]
+    CreateShipmentRequest:
+      type: object
+      properties:
+        carrier:
+          type: string
+        trackingNumber:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShipmentLine'
+      required: [carrier, trackingNumber, lines]
