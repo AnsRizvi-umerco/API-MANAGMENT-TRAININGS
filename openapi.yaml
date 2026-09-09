@@ -6,10 +6,8 @@ info:
     Purchase Orders REST API shaped like EDI 850/855/856.
     No security schemes — authentication and rate limiting are handled by IBM API Gateway.
 servers:
-  - url: http://localhost:3000
+  - url: https://api-managment-eta.vercel.app
     description: Local development
-  - url: https://REPLACE-WITH-PUBLIC-URL
-    description: Public gateway / Render URL
 paths:
   /health:
     get:
